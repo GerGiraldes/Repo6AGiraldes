@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Horizonte Artificial Interactivo</title>
+  <style>
+    :root{
+      --bg:#071024;
+      --panel:#0b1630;
+      --accent:#60a5fa;
+      --sky:#48a9ff;
+      --ground:#b5651d;
+      --text:#e6eef8;
+      --muted:#9fb3cc;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto;min-height:100vh;background:linear-gradient(180deg,#031024 0%,var(--bg) 60%);color:var(--text);display:flex;flex-direction:column}
+    header{padding:18px 24px;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:space-between}
+    header h1{font-size:18px;margin:0}
+    main{display:grid;grid-template-columns:420px 1fr;gap:20px;padding:24px;align-items:start}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.02));border:1px solid rgba(255,255,255,0.04);border-radius:14px;padding:14px}
+    .controls label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    .controls input[type=number],.controls select{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:#07182b;color:var(--text);font-size:14px}
+    .row{display:flex;gap:10px}
+    .row > div{flex:1}
+    .btns{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+    button{background:var(--accent);border:none;padding:10px 12px;border-radius:10px;color:#03203b;font-weight:700;cursor:pointer}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--text)}
+    button.warn{background:#f59e0b;color:#071018}
+
+    /* Horizonte */
+    .vis{display:flex;align-items:center;justify-content:center;padding:18px}
+    .horizon-wrapper{width:460px;height:460px;position:relative}
+    .horizon-card{width:100%;height:100%;border-radius:999px;overflow:hidden;background:#021022;border:6px solid rgba(255,255,255,0.06);box-shadow:0 10px 30px rgba(0,0,0,0.6)}
+    .horizon-canvas{position:absolute;inset:0;transform-origin:50% 50%}
+
+    /* marco con marcas de bank */
+    .bank-ring{position:absolute;inset:0;pointer-events:none}
+    .bank-ring svg{width:100%;height:100%;display:block}
+    .aircraft{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none}
+    .aircraft .wings{width:160px;height:10px;display:block;background:#fff;border-radius:6px;transform:translateY(-3px);box-shadow:0 2px 6px rgba(0,0,0,0.5)}
+    .aircraft .nose{width:14px;height:14px;background:#fff;border-radius:4px;margin:0 auto}
+
+    /* lectura digital */
+    .readouts{display:grid;gap:10px}
+    .tile{background:rgba(255,255,255,0.02);padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.03)}
+    .big{font-size:28px;font-weight:800}
+    .unit{color:var(--muted);font-weight:700;margin-left:8px}
+
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:8px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.03);color:var(--muted)}
+    th{color:var(--muted)}
+
+    footer{padding:12px;text-align:center;color:var(--muted)}
+
+    @media (max-width:980px){main{grid-template-columns:1fr;padding:14px}.horizon-wrapper{width:360px;height:360px;margin:0 auto}}
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Horizonte Artificial Interactivo</h1>
+      <div style="font-size:13px;color:var(--muted)">Simula actitud: Pitch (inclinación) y Roll (alabeo)</div>
+    </div>
+  </header>
+
+  <main>
+    <section class="card controls" aria-label="Controles">
+      <h2 style="margin-top:0">Controles</h2>
+      <p style="color:var(--muted);margin:6px 0 12px">Introduce valores manuales o ejecuta una simulación en tiempo real.</p>
+
+      <div class="row">
+        <div>
+          <label for="pitch">Pitch (°)</label>
+          <input id="pitch" type="number" step="0.5" min="-90" max="90" value="0">
+        </div>
+        <div>
+          <label for="roll">Roll (°)</label>
+          <input id="roll" type="number" step="0.5" min="-180" max="180" value="0">
+        </div>
+      </div>
+
+      <div style="margin-top:10px">
+        <label for="speed">Velocidad de animación (ms)</label>
+        <input id="speed" type="number" min="20" step="10" value="60">
+      </div>
+
+      <div class="btns">
+        <button id="apply">Aplicar</button>
+        <button id="register" class="ghost">Registrar</button>
+        <button id="simulate" class="ghost">Iniciar simulación</button>
+        <button id="stop" class="warn">Detener</button>
+      </div>
+
+      <p style="color:var(--muted);margin-top:10px">Notas: Pitch positivo = morro arriba; Roll positivo = alabeo a la derecha (estándar aeronáutico).</p>
+    </section>
+
+    <section class="card vis" aria-label="Visualización">
+      <div class="horizon-wrapper">
+        <div class="horizon-card">
+          <!-- Lienzo: usaremos un div con transform para simular pitch y roll -->
+          <div id="horizon" class="horizon-canvas" aria-hidden="false" style="background:transparent">
+            <!-- Usamos SVG para sky/ground + marcas de pitch -->
+            <svg id="svgH" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%">
+              <defs>
+                <clipPath id="circleClip"><circle cx="200" cy="200" r="1900"/></clipPath>
+              </defs>
+
+              <g id="hGroup" clip-path="url(#circleClip)">
+                <!-- Sky (rect que se mueve con pitch) -->
+                <rect id="sky" x="0" y="-800" width="400" height="1200" fill="url(#skyGrad)" />
+                <!-- Ground -->
+                <rect id="ground" x="0" y="200" width="400" height="1200" fill="var(--groundColor)" />
+
+                <!-- Pitch ladder: líneas y etiquetas -->
+                <g id="ladder"></g>
+
+                <!-- Horizon line center -->
+                <line x1="0" y1="200" x2="400" y2="200" stroke="#fff" stroke-width="2" opacity="0.85"/>
+              </g>
+
+              <!-- Defs gradient and ground color via JS-inserted defs -->
+            </svg>
+
+            <!-- Bank ring overlay (marks at top) -->
+            <div class="bank-ring">
+              <svg viewBox="0 0 400 400">
+                <g transform="translate(200,200)">
+                  <g id="bankMarks" transform="rotate(0)"></g>
+                  <circle r="190" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2"></circle>
+                </g>
+              </svg>
+            </div>
+
+            <!-- Mini aircraft fixed in center -->
+            <div class="aircraft" aria-hidden="true">
+              <div style="width:160px;height:10px;background:#fff;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>
+              <div style="width:12px;height:12px;background:#fff;margin:6px auto 0;border-radius:3px"></div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Readouts -->
+        <div style="position:absolute;right:8px;top:18px;width:220px">
+          <div class="readouts">
+            <div class="tile"><div style="color:var(--muted)">Pitch</div><div class="big" id="pitchOut">0.0<span class="unit">°</span></div></div>
+            <div class="tile"><div style="color:var(--muted)">Roll</div><div class="big" id="rollOut">0.0<span class="unit">°</span></div></div>
+            <div class="tile"><div style="color:var(--muted)">Estado</div><div id="status">Listo</div></div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <section class="card" style="height:fit-content">
+      <h3 style="margin-top:0">Registro de lecturas</h3>
+      <table id="logTable"><thead><tr><th>Fecha/Hora</th><th>Pitch (°)</th><th>Roll (°)</th></tr></thead><tbody></tbody></table>
+    </section>
+  </main>
+
+  <footer>Horizonte artificial interactivo — HTML, SVG y JavaScript puro ✈️</footer>
+
+  <script>
+    // --- Elementos ---
+    const pitchEl = document.getElementById('pitch');
+    const rollEl = document.getElementById('roll');
+    const speedEl = document.getElementById('speed');
+    const applyBtn = document.getElementById('apply');
+    const registerBtn = document.getElementById('register');
+    const simulateBtn = document.getElementById('simulate');
+    const stopBtn = document.getElementById('stop');
+
+    const hGroup = document.getElementById('hGroup');
+    const ladder = document.getElementById('ladder');
+    const bankMarks = document.getElementById('bankMarks');
+
+    const pitchOut = document.getElementById('pitchOut');
+    const rollOut = document.getElementById('rollOut');
+    const status = document.getElementById('status');
+
+    const logTbody = document.querySelector('#logTable tbody');
+
+    // Simulación
+    let simInterval = null;
+
+    // Defs: crear gradientes y color de ground
+    (function createDefs(){
+      const svg = document.getElementById('svgH');
+      const ns = 'http://www.w3.org/2000/svg';
+      const defs = document.createElementNS(ns,'defs');
+      const grad = document.createElementNS(ns,'linearGradient'); grad.id='skyGrad'; grad.setAttribute('x1','0'); grad.setAttribute('y1','0'); grad.setAttribute('x2','0'); grad.setAttribute('y2','1');
+      const stop1 = document.createElementNS(ns,'stop'); stop1.setAttribute('offset','0%'); stop1.setAttribute('stop-color','#87ceff');
+      const stop2 = document.createElementNS(ns,'stop'); stop2.setAttribute('offset','100%'); stop2.setAttribute('stop-color','#48a9ff');
+      grad.appendChild(stop1); grad.appendChild(stop2);
+      defs.appendChild(grad);
+
+      const groundColor = document.createElementNS(ns,'style');
+      groundColor.textContent = ':root{--groundColor: #8b5a2b}';
+      defs.appendChild(groundColor);
+      svg.appendChild(defs);
+
+      // Dibujar inicialmente la escalera de pitch
+      drawPitchLadder();
+      drawBankMarks();
+    })();
+
+    // DIBUJOS: escalera de pitch (cada 5° hasta ±90°)
+    function drawPitchLadder(){
+      ladder.innerHTML='';
+      const ns='http://www.w3.org/2000/svg';
+      // cada 5°, etiquetado cada 10°
+      for(let ang=-90; ang<=90; ang+=5){
+        const y = 200 - ang * 2; // escala visual: 1° = 2px (ajustable)
+        if(ang===0) continue; // la línea central ya está
+        const group = document.createElementNS(ns,'g');
+        group.setAttribute('transform',`translate(0,0)`);
+        const line = document.createElementNS(ns,'line');
+        line.setAttribute('x1',80); line.setAttribute('x2',320);
+        line.setAttribute('y1',y); line.setAttribute('y2',y);
+        line.setAttribute('stroke','#ffffff'); line.setAttribute('stroke-width', ang%10===0?2:1);
+        line.setAttribute('opacity',ang%10===0?0.9:0.65);
+        group.appendChild(line);
+        if(ang%10===0){
+          const txtL = document.createElementNS(ns,'text');
+          txtL.setAttribute('x',70); txtL.setAttribute('y',y+4); txtL.setAttribute('text-anchor','end');
+          txtL.setAttribute('font-size','12'); txtL.setAttribute('fill','#ffffff'); txtL.textContent=Math.abs(ang);
+          const txtR = document.createElementNS(ns,'text');
+          txtR.setAttribute('x',330); txtR.setAttribute('y',y+4); txtR.setAttribute('font-size','12'); txtR.setAttribute('fill','#ffffff'); txtR.textContent=Math.abs(ang);
+          group.appendChild(txtL); group.appendChild(txtR);
+        }
+        ladder.appendChild(group);
+      }
+    }
+
+    // Bank marks at top (standard 30°,45°,60°)
+    function drawBankMarks(){
+      bankMarks.innerHTML='';
+      const ns='http://www.w3.org/2000/svg';
+      const marks = [ -60,-45,-30,-20,-10,0,10,20,30,45,60 ];
+      marks.forEach(m=>{
+        const g = document.createElementNS(ns,'g');
+        g.setAttribute('transform',`rotate(${m})`);
+        const line = document.createElementNS(ns,'line');
+        line.setAttribute('x1',0); line.setAttribute('x2',0); line.setAttribute('y1',-190); line.setAttribute('y2',-170);
+        line.setAttribute('stroke','#fff'); line.setAttribute('stroke-width',m%30===0?3:1.5);
+        g.appendChild(line);
+        // small triangle at 0
+        if(m===0){ const tri = document.createElementNS(ns,'polygon'); tri.setAttribute('points','-6,-190 6,-190 0,-176'); tri.setAttribute('fill','#fff'); g.appendChild(tri);} 
+        bankMarks.appendChild(g);
+      });
+    }
+
+    // Actualiza la vista: roll mueve el grupo entero; pitch desplaza verticalmente dentro del grupo
+    function updateHorizon(pitchDeg, rollDeg, animate=true){
+      // limit
+      pitchDeg = Math.max(-90, Math.min(90, pitchDeg));
+      rollDeg = ((rollDeg%360)+360)%360; if(rollDeg>180) rollDeg -=360; // -180..180
+
+      // transformaciones
+      // 1) rotar el grupo alrededor del centro (roll)
+      // 2) trasladar en Y dependiendo del pitch (pitch mueve sky/ground up/down in group coords)
+
+      const pitchPx = pitchDeg * 2; // 1° = 2px mapping (tweak)
+      const transform = `translate(0, ${-pitchPx}) rotate(${rollDeg},200,200)`;
+      if(animate){
+        hGroup.style.transition = `transform ${Math.max(40,Number(speedEl.value||60))}ms linear`;
+      } else { hGroup.style.transition = 'none'; }
+      hGroup.setAttribute('transform', transform);
+
+      pitchOut.textContent = Number(pitchDeg).toFixed(1);
+      rollOut.textContent = Number(rollDeg).toFixed(1);
+      status.textContent = 'Actualizado';
+    }
+
+    // Eventos
+    applyBtn.addEventListener('click', ()=>{
+      updateHorizon(Number(pitchEl.value||0), Number(rollEl.value||0), true);
+    });
+
+    registerBtn.addEventListener('click', ()=>{
+      const now = new Date();
+      const tr = document.createElement('tr');
+      const tds = [ now.toLocaleString(), Number(pitchEl.value||0).toFixed(1), Number(rollEl.value||0).toFixed(1) ];
+      tds.forEach(v=>{const td=document.createElement('td'); td.textContent=v; tr.appendChild(td)});
+      logTbody.prepend(tr);
+    });
+
+    simulateBtn.addEventListener('click', ()=>{
+      if(simInterval) return;
+      status.textContent = 'Simulando…';
+      let t=0;
+      simInterval = setInterval(()=>{
+        t += 0.05;
+        // patrón suave: roll oscila +-40°, pitch oscila +-10° con algo de ruido
+        const rollVal = 40 * Math.sin(t*0.9) + 6*Math.sin(t*1.5);
+        const pitchVal = 8 * Math.sin(t*0.6) + 2*Math.cos(t*1.1);
+        rollEl.value = rollVal.toFixed(1);
+        pitchEl.value = pitchVal.toFixed(1);
+        updateHorizon(pitchVal, rollVal, true);
+      }, Number(speedEl.value||60));
+    });
+
+    stopBtn.addEventListener('click', ()=>{
+      if(simInterval){ clearInterval(simInterval); simInterval=null; status.textContent='Detenido'; }
+    });
+
+    // Sincronizar inputs en tiempo real
+    [pitchEl, rollEl].forEach(el=>el.addEventListener('input', ()=>{
+      updateHorizon(Number(pitchEl.value||0), Number(rollEl.value||0), true);
+    }));
+
+    // Init: centrado
+    updateHorizon(0,0,false);
+  </script>
+</body>
+</html>
