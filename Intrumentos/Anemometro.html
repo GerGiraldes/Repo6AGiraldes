@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anemómetro Interactivo</title>
+  <style>
+    :root {
+      --bg: #0f172a;        /* slate-900 */
+      --panel: #111827;     /* gray-900 */
+      --accent: #22c55e;    /* green-500 */
+      --accent-2: #60a5fa;  /* blue-400 */
+      --text: #e5e7eb;      /* gray-200 */
+      --muted: #9ca3af;     /* gray-400 */
+      --danger: #ef4444;    /* red-500 */
+      --warn: #f59e0b;      /* amber-500 */
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial;
+      background: radial-gradient(1200px 800px at 80% -10%, #1f2937 0%, var(--bg) 50%);
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    header {
+      padding: 20px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0));
+      backdrop-filter: blur(6px);
+      position: sticky; top: 0; z-index: 10;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    header h1 { margin: 0; font-size: 22px; letter-spacing: 0.3px; }
+    header small { color: var(--muted); }
+
+    .wrap {
+      padding: 28px;
+      display: grid;
+      gap: 24px;
+      grid-template-columns: 380px 1fr;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+    }
+
+    .panel { padding: 20px; }
+    .panel h2 { margin: 0 0 14px; font-size: 18px; font-weight: 600; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+
+    label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 6px; }
+    input, select {
+      width: 100%;
+      background: #0b1220;
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 14px;
+      outline: none;
+    }
+    input:focus, select:focus { border-color: var(--accent-2); box-shadow: 0 0 0 2px rgba(96,165,250,0.25); }
+
+    .btns { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    button {
+      background: var(--accent);
+      border: none;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-weight: 600;
+      color: #052e16;
+      cursor: pointer;
+      transition: transform .05s ease, filter .2s ease;
+    }
+    button:hover { filter: brightness(1.05); }
+    button:active { transform: translateY(1px); }
+    .ghost { background: transparent; color: var(--text); border: 1px solid rgba(255,255,255,0.15); }
+    .danger { background: var(--danger); color: #fff; }
+
+    /* Lado derecho: gauge + lecturas */
+    .display {
+      padding: 22px;
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .gauge {
+      aspect-ratio: 1 / 1;
+      width: 100%;
+      max-width: 520px;
+      margin: 0 auto;
+      position: relative;
+    }
+    .readouts {
+      display: grid; gap: 12px;
+    }
+    .tile {
+      background: #0a1324;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 14px;
+    }
+    .big { font-size: 36px; font-weight: 800; letter-spacing: 1px; }
+    .unit { color: var(--muted); font-weight: 600; font-size: 12px; margin-left: 6px; }
+
+    .legend { color: var(--muted); font-size: 12px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; }
+    th { color: var(--muted); font-weight: 600; }
+
+    footer { color: var(--muted); padding: 12px 20px; font-size: 12px; text-align: center; }
+
+    @media (max-width: 980px) {
+      .wrap { grid-template-columns: 1fr; }
+      .display { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Anemómetro Interactivo</h1>
+      <small>Introduce valores o simula lecturas de viento en tiempo real.</small>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- Panel de controles -->
+    <section class="card panel" aria-label="Controles">
+      <h2>Controles</h2>
+      <p class="sub">Configura manualmente las lecturas o ejecuta una simulación.</p>
+
+      <div class="grid-2">
+        <div>
+          <label for="vel">Velocidad del viento</label>
+          <input id="vel" type="number" min="0" step="0.1" value="12" inputmode="decimal" />
+        </div>
+        <div>
+          <label for="unidad">Unidad</label>
+          <select id="unidad">
+            <option value="kt" selected>Nudos (kt)</option>
+            <option value="kmh">Kilómetros/h (km/h)</option>
+            <option value="ms">Metros/s (m/s)</option>
+            <option value="mph">Millas/h (mph)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid-3" style="margin-top:12px;">
+        <div>
+          <label for="rafaga">Ráfaga máx.</label>
+          <input id="rafaga" type="number" min="0" step="0.1" value="18" />
+        </div>
+        <div>
+          <label for="dir">Dirección (°)</label>
+          <input id="dir" type="number" min="0" max="359" step="1" value="220" />
+        </div>
+        <div>
+          <label for="prom">Promedio (últ. 10 s)</label>
+          <input id="prom" type="number" min="0" step="0.1" value="10" />
+        </div>
+      </div>
+
+      <div class="btns">
+        <button id="aplicar">Aplicar al anemómetro</button>
+        <button id="registrar" class="ghost">Registrar lectura</button>
+        <button id="simular" class="ghost">Iniciar simulación</button>
+        <button id="detener" class="danger">Detener</button>
+      </div>
+
+      <p class="legend" style="margin-top:10px;">
+        Consejos: usa <kbd>Tab</kbd> para saltar entre casillas. Cambiar la unidad actualiza la escala del dial.
+      </p>
+    </section>
+
+    <!-- Visualización y lecturas -->
+    <section class="card display" aria-label="Visualización">
+      <div class="gauge" aria-live="polite">
+        <!-- SVG del dial -->
+        <svg id="svgGauge" viewBox="0 0 200 200" role="img" aria-label="Anemómetro" style="width:100%; height:100%; display:block;">
+          <!-- Fondo -->
+          <defs>
+            <linearGradient id="grad" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="#0b1220" />
+              <stop offset="100%" stop-color="#030712" />
+            </linearGradient>
+          </defs>
+          <circle cx="100" cy="100" r="95" fill="url(#grad)" stroke="rgba(255,255,255,0.1)" stroke-width="2" />
+
+          <!-- Arco de rango seguro/alto -->
+          <path id="arcSafe" d="" fill="none" stroke="#22c55e" stroke-width="6" stroke-linecap="round" />
+          <path id="arcWarn" d="" fill="none" stroke="#f59e0b" stroke-width="6" stroke-linecap="round" />
+          <path id="arcDanger" d="" fill="none" stroke="#ef4444" stroke-width="6" stroke-linecap="round" />
+
+          <!-- Ticks -->
+          <g id="ticks"></g>
+
+          <!-- Etiquetas de unidades -->
+          <text id="unitLabel" x="100" y="128" text-anchor="middle" fill="#9ca3af" font-size="8">kt</text>
+
+          <!-- Lectura digital en el centro -->
+          <text id="speedLabel" x="100" y="110" text-anchor="middle" fill="#e5e7eb" font-size="26" font-weight="800">12.0</text>
+
+          <!-- Aguja -->
+          <g id="needle" transform="rotate(-120 100 100)">
+            <line x1="100" y1="100" x2="100" y2="28" stroke="#60a5fa" stroke-width="3" stroke-linecap="round" />
+            <circle cx="100" cy="100" r="5" fill="#60a5fa" />
+          </g>
+
+          <!-- Rosa de los vientos para dirección -->
+          <g transform="translate(100 170)">
+            <circle cx="0" cy="0" r="13" fill="#0a1324" stroke="rgba(255,255,255,0.12)" />
+            <g id="compass" transform="rotate(0)">
+              <polygon points="0,-10 3,0 0,3 -3,0" fill="#22c55e" />
+            </g>
+            <text x="0" y="27" text-anchor="middle" fill="#9ca3af" font-size="7">dirección</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="readouts">
+        <div class="tile">
+          <div>Velocidad</div>
+          <div class="big"><span id="velOut">12.0</span><span class="unit" id="unitOut">kt</span></div>
+        </div>
+        <div class="tile">
+          <div>Ráfaga</div>
+          <div class="big"><span id="rafOut">18.0</span><span class="unit" id="unitOut2">kt</span></div>
+        </div>
+        <div class="tile">
+          <div>Promedio</div>
+          <div class="big"><span id="promOut">10.0</span><span class="unit" id="unitOut3">kt</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Registro -->
+    <section class="card panel" aria-label="Registro">
+      <h2>Registro de lecturas</h2>
+      <table id="tabla">
+        <thead>
+          <tr>
+            <th>Fecha/Hora</th>
+            <th>Velocidad</th>
+            <th>Ráfaga</th>
+            <th>Promedio</th>
+            <th>Dirección</th>
+            <th>Unidad</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <footer>
+    Giraldes Germán 6to A Av. ✈️💨
+  </footer>
+
+  <script>
+    // --- Utilidades de conversión ---
+    const toKnots = (val, unit) => {
+      const v = Number(val) || 0;
+      switch(unit){
+        case 'kmh': return v / 1.852;
+        case 'ms':  return v / 0.514444;
+        case 'mph': return v / 1.15078;
+        default:    return v; // kt
+      }
+    }
+    const fromKnots = (valKt, unit) => {
+      const v = Number(valKt) || 0;
+      switch(unit){
+        case 'kmh': return v * 1.852;
+        case 'ms':  return v * 0.514444;
+        case 'mph': return v * 1.15078;
+        default:    return v; // kt
+      }
+    }
+
+    // Estado
+    let simTimer = null;
+    const maxKt = 120; // escala base del dial (en nudos)
+
+    // Referencias DOM
+    const vel = document.getElementById('vel');
+    const rafaga = document.getElementById('rafaga');
+    const dir = document.getElementById('dir');
+    const prom = document.getElementById('prom');
+    const unidad = document.getElementById('unidad');
+
+    const aplicarBtn = document.getElementById('aplicar');
+    const registrarBtn = document.getElementById('registrar');
+    const simularBtn = document.getElementById('simular');
+    const detenerBtn = document.getElementById('detener');
+
+    const needle = document.getElementById('needle');
+    const speedLabel = document.getElementById('speedLabel');
+    const unitLabel = document.getElementById('unitLabel');
+    const compass = document.getElementById('compass');
+    const ticks = document.getElementById('ticks');
+    const arcSafe = document.getElementById('arcSafe');
+    const arcWarn = document.getElementById('arcWarn');
+    const arcDanger = document.getElementById('arcDanger');
+
+    const velOut = document.getElementById('velOut');
+    const rafOut = document.getElementById('rafOut');
+    const promOut = document.getElementById('promOut');
+    const unitOut = document.getElementById('unitOut');
+    const unitOut2 = document.getElementById('unitOut2');
+    const unitOut3 = document.getElementById('unitOut3');
+
+    // --- Dibujo del dial ---
+    function polar(cx, cy, r, angleDeg){
+      const a = (angleDeg - 90) * Math.PI / 180;
+      return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+    }
+    function describeArc(cx, cy, r, start, end){
+      const s = polar(cx, cy, r, end);
+      const e = polar(cx, cy, r, start);
+      const large = end - start <= 180 ? 0 : 1;
+      return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 0 ${e.x} ${e.y}`;
+    }
+
+    function drawScale(){
+      // limpiar
+      ticks.innerHTML = '';
+      // actualizar etiquetas de unidad
+      unitLabel.textContent = unidad.value;
+      unitOut.textContent = unidad.value;
+      unitOut2.textContent = unidad.value;
+      unitOut3.textContent = unidad.value;
+
+      const maxCur = fromKnots(maxKt, unidad.value); // escala en unidad actual
+
+      // Arcos de colores (0-60% verde, 60-85% amarillo, 85-100% rojo)
+      const start = -120, end = 120; // ángulo
+      const r = 82;
+      const g1 = start + (end - start) * 0.60;
+      const g2 = start + (end - start) * 0.85;
+      arcSafe.setAttribute('d', describeArc(100,100,r,start,g1));
+      arcWarn.setAttribute('d', describeArc(100,100,r,g1,g2));
+      arcDanger.setAttribute('d', describeArc(100,100,r,g2,end));
+
+      // Ticks principales cada 10% (11 marcas) y menores cada 5%
+      const g = document.createDocumentFragment();
+      for(let i=0;i<=20;i++){
+        const frac = i/20; // 0..1
+        const ang = -120 + frac * 240;
+        const len = (i%2===0)? 10 : 6;
+        const p1 = polar(100,100,90,ang);
+        const p2 = polar(100,100,90-len,ang);
+        const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+        line.setAttribute('x1', p1.x); line.setAttribute('y1', p1.y);
+        line.setAttribute('x2', p2.x); line.setAttribute('y2', p2.y);
+        line.setAttribute('stroke', 'rgba(255,255,255,0.6)');
+        line.setAttribute('stroke-width', i%2===0? '1.8':'1');
+        g.appendChild(line);
+
+        // Etiqueta cada 20% (0,20,40,60,80,100)
+        if(i%4===0){
+          const lblVal = Math.round((maxCur * frac).toFixed(0));
+          const pt = polar(100,100,90-16,ang);
+          const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+          text.setAttribute('x', pt.x);
+          text.setAttribute('y', pt.y+3);
+          text.setAttribute('text-anchor','middle');
+          text.setAttribute('fill','#9ca3af');
+          text.setAttribute('font-size','8');
+          text.textContent = lblVal;
+          g.appendChild(text);
+        }
+      }
+      ticks.appendChild(g);
+    }
+
+    function setNeedleByValue(val, unit){
+      // val en unidad actual; convertir a nudos para usar escala base
+      const vKt = toKnots(val, unit);
+      const clamped = Math.max(0, Math.min(maxKt, vKt));
+      const frac = clamped / maxKt; // 0..1
+      const angle = -120 + frac * 240;
+      needle.setAttribute('transform', `rotate(${angle} 100 100)`);
+    }
+
+    function updateReadouts(){
+      const u = unidad.value;
+      const v = Number(vel.value) || 0;
+      const r = Number(rafaga.value) || 0;
+      const p = Number(prom.value) || 0;
+      const d = Number(dir.value) || 0;
+
+      // Sanitizar
+      vel.value = Math.max(0, v);
+      rafaga.value = Math.max(0, r);
+      prom.value = Math.max(0, p);
+      dir.value = ((d % 360) + 360) % 360; // 0..359
+
+      // Aguja y digital central
+      setNeedleByValue(v, u);
+      speedLabel.textContent = (Number(v).toFixed(1));
+
+      // Lecturas laterales
+      velOut.textContent = Number(v).toFixed(1);
+      rafOut.textContent = Number(r).toFixed(1);
+      promOut.textContent = Number(p).toFixed(1);
+
+      // Brújula
+      compass.setAttribute('transform', `rotate(${dir.value})`);
+    }
+
+    function registrarLectura(){
+      const tbody = document.querySelector('#tabla tbody');
+      const tr = document.createElement('tr');
+      const u = unidad.value;
+      const now = new Date();
+      const fecha = now.toLocaleString();
+      const cells = [
+        fecha,
+        `${Number(vel.value||0).toFixed(1)}`,
+        `${Number(rafaga.value||0).toFixed(1)}`,
+        `${Number(prom.value||0).toFixed(1)}`,
+        `${Number(dir.value||0)}`,
+        u
+      ];
+      cells.forEach(c=>{ const td=document.createElement('td'); td.textContent=c; tr.appendChild(td); });
+      tbody.prepend(tr);
+    }
+
+    function startSim(){
+      if(simTimer) return;
+      simularBtn.textContent = 'Simulando…';
+      let t = 0;
+      simTimer = setInterval(()=>{
+        t += 0.25;
+        // Pequeña onda + ruido
+        const base = 12 + 4*Math.sin(t/1.7) + 2*Math.sin(t*0.6);
+        const jitter = (Math.random()-0.5) * 2.0;
+        const v = Math.max(0, base + jitter);
+        const r = v + 4 + Math.random()*3;
+        const p = v - 2 + Math.random()*2;
+        const d = (Number(dir.value)||0 + 2 + Math.random()*6) % 360;
+        vel.value = v.toFixed(1);
+        rafaga.value = r.toFixed(1);
+        prom.value = Math.max(0, p).toFixed(1);
+        dir.value = Math.round(d);
+        updateReadouts();
+      }, 250);
+    }
+
+    function stopSim(){
+      if(simTimer){ clearInterval(simTimer); simTimer=null; }
+      simularBtn.textContent = 'Iniciar simulación';
+    }
+
+    // Eventos
+    aplicarBtn.addEventListener('click', updateReadouts);
+    registrarBtn.addEventListener('click', registrarLectura);
+    simularBtn.addEventListener('click', startSim);
+    detenerBtn.addEventListener('click', stopSim);
+
+    [vel, rafaga, prom, dir].forEach(el=>{
+      el.addEventListener('input', updateReadouts);
+    });
+
+    unidad.addEventListener('change', ()=>{ drawScale(); updateReadouts(); });
+
+    // Init
+    drawScale();
+    updateReadouts();
+  </script>
+</body>
+</html>
